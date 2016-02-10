@@ -21,6 +21,7 @@ def is_valid_path(arg):
     else:
         return os.path.abspath(arg)
 
+
 def is_writable(path, overwrite):
     if not os.path.exists(path):
         return True
@@ -30,10 +31,6 @@ def is_writable(path, overwrite):
         else:
             print('path [%s] exists, skipping' % path)
         return overwrite
-
-# def mkdirs_if_writable(path, overwrite):
-#     if not os.path.exists(path):
-#         os.makedirs(path)
 
 
 def is_valid_hostname(arg):
@@ -62,7 +59,6 @@ if __name__ == '__main__':
 
     template_dir = os.path.join(script_dir, 'templates')
 
-
     parser = argparse.ArgumentParser(
         description="Automatically generate conf files for a server")
 
@@ -88,7 +84,10 @@ if __name__ == '__main__':
         )
     parser.add_argument('-d', '--domain', 
         type=is_valid_hostname, 
-        help='Domain name')
+        help='Domain name'
+        )
+
+    # boolean switches
     parser.add_argument('--skip-nginx', action='store_true')
     parser.add_argument('--skip-uwsgi', action='store_true')
     parser.add_argument('--skip-git',   action='store_true')
@@ -96,14 +95,6 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--overwrite', action='store_true')
 
     args = vars(parser.parse_args())
-    # args.update({'beta': ''})
-
-
-    # print(script_dir)
-    # print(template_dir)
-    print(args)
-
-
 
     glob_vars = [
         'target_dir',
@@ -121,23 +112,11 @@ if __name__ == '__main__':
         {k: v for (k, v) in args.items() if k in glob_vars}
     )
 
-
-    # skip_nginx = args['skip_nginx']
-    # skip_uwsgi = args['skip_uwsgi']
-    # overwrite  = args['overwrite']
-
-    print(target_dir)
-    print(skip_nginx)
-    print(skip_uwsgi)
-    print(ip)
-    # sys.exit()
-
     # template locations
     te_nginx_filename  = os.path.join(template_dir, 'proj_conf.nginx')
     te_nginx_https     = os.path.join(template_dir, 'proj_https.nginx')
     te_nginx_redirects = os.path.join(template_dir, 'proj_redirects.nginx')
     te_uwsgi_filename  = os.path.join(template_dir, 'proj.uwsgi')
-
 
     has_domain_and_ip = bool(args['domain'] and args['ip'])
 
@@ -149,50 +128,38 @@ if __name__ == '__main__':
     if not skip_nginx and ip and domain:
         # nginx target directories
         nginx_filename  = os.path.abspath(
-            os.path.join(target_conf_dir, '%s_conf.nginx' % args['proj'])
-        )
+            os.path.join(target_conf_dir, '%s_conf.nginx' % args['proj']))
         nginx_https     = os.path.abspath(
-            os.path.join(target_conf_dir, '%s_https.nginx' % args['proj'])
-        )
+            os.path.join(target_conf_dir, '%s_https.nginx' % args['proj']))
         nginx_redirects = os.path.abspath(
-            os.path.join(target_conf_dir, '%s_redirects.nginx' % args['proj'])
-        )
-        print(nginx_filename)
-        print(locals()['nginx_filename'])
+            os.path.join(target_conf_dir, '%s_redirects.nginx' % args['proj']))
 
         nginx_vars = ['nginx_filename', 'nginx_https', 'nginx_redirects']
         local_vars = locals()
-
         args.update({k:local_vars[k] for k in nginx_vars})
 
         if is_writable(nginx_filename, overwrite):
-            # os.makedirs(nginx_filename)
-            
+            # open original template
             with open(te_nginx_filename, 'r') as te_nginx_file:
                 nginx_template = Template(te_nginx_file.read())
                 nginx_str = nginx_template.substitute(**args)
 
+            # write a config from a "rendered" template
             with open(nginx_filename, 'w') as nginx_file:
                 nginx_file.write(nginx_str)
 
+        # https forcing snippet (commented out)
         if is_writable(nginx_https, overwrite):
             copyfile(te_nginx_https, nginx_https)
 
+        # redirect list snippet (commented out)
         if is_writable(nginx_redirects, overwrite):
             copyfile(te_nginx_redirects, nginx_redirects)
+
 
     if not skip_uwsgi:
         pass
 
+
     if not skip_venv:
         pass
-
-
-
-    # nginx_template.substitute(proj=args['proj'], domain=args['domain'])
-
-    # print(nginx_str)
-
-    # create uwsgi_config
-    # create virtualenv environment
-    
