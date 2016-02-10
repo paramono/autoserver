@@ -1,0 +1,118 @@
+# the upstream component nginx needs to connect to
+upstream django_beta$proj {
+    server unix://${target_dir}/beta_$proj/$proj.sock; # for a file socket
+    # server 127.0.0.1:8001; # for a web port socket (we'll use this first)
+}
+
+upstream django_$proj {
+    server unix://${target_dir}/$proj/$proj.sock; # for a file socket
+    # server 127.0.0.1:8001; # for a web port socket (we'll use this first)
+}
+
+
+# cyrillic domain names
+# server {
+#     server_name домен.рф;
+#     listen      80;
+#     charset utf-8;
+#     rewrite ^/(.*)$$ http://$domain$$request_uri redirect;
+# }
+
+# configuration of the server
+server {
+    # the port your site will be served on
+    listen          80;
+    # listen          443 ssl spdy;
+    listen          443 ssl;
+    gzip            on;
+    gzip_comp_level 6;
+    gzip_proxied    any;
+    gzip_types      text/plain text/html text/css application/x-javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # the domain name it will serve for
+    server_name $domain; # substitute your machine's IP address or FQDN
+    server_name $ip; # substitute your machine's IP address or FQDN
+
+    # enable ssl!
+    # ssl_stapling on;
+    # ssl on;
+    # ssl_certificate     ${target_dir}/$proj/ssl/1_${domain}_bundle.crt;
+    # ssl_certificate_key ${target_dir}/$proj/ssl/2_${domain}.key;
+    # ssl_dhparam ${target_dir}/$proj/ssl/;
+ 
+    ssl_session_timeout 24h;
+    ssl_session_cache shared:SSL:5m;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+
+    ssl_ciphers kEECDH+AES128:kEECDH:kEDH:-3DES:kRSA+AES128:kEDH+3DES:DES-CBC3-SHA:!RC4:!aNULL:!eNULL:!MD5:!EXPORT:!LOW:!SEED:!CAMELLIA:!IDEA:!PSK:!SRP:!SSLv2;
+    ssl_prefer_server_ciphers on;
+
+    # add_header Strict-Transport-Security "max-age=31536000;";
+    # add_header Content-Security-Policy-Report-Only "default-src https:; script-src https: 'unsafe-eval' 'unsafe-inline'; style-src https: 'unsafe-inline'; img-src https: data:; font-src https: data:; report-uri /csp-report";
+
+    # google pagespeed
+    # pagespeed EnableFilters inline_google_font_css;
+    # pagespeed FetchHttps enable;
+
+    charset     utf-8;
+
+    # max upload size
+    client_max_body_size 75M;   # adjust to taste
+
+    # Django media
+    location /media  {
+        alias ${target_dir}/$proj/$app/$app/media;  # your Django project's media files - amend as required
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    location /static {
+        alias ${target_dir}/$proj/$app/$app/static; # your Django project's static files - amend as required
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    location = /robots.txt {
+      expires -1;
+      alias ${target_dir}/$proj/$app/$app/static/common/robots/robots.txt;
+      # try_files /robots.txt =404;
+    }
+
+    location = /sitemap.xml {
+      expires -1;
+      alias ${target_dir}/$proj/$app/$app/static/common/robots/sitemap.xml;
+    }
+
+    location = /favicon.ico {
+      expires -1;
+      alias ${target_dir}/$proj/$app/$app/static/core/img/favicon.ico;
+    }
+
+    # various verification urls
+    # location = /google3ef5b6201d2b399d.html {
+    #   expires -1;
+    #   alias ${target_dir}/$proj/$app/$app/google3ef5b6201d2b399d.html;
+    # }
+
+    # location /blog {
+    #     return 307 $$scheme://$$server_name/;
+    # }
+
+    # redirect tableы
+    location / {
+
+	# http -> https 
+    	include $nginx_https;
+
+	# redirect example
+	include $nginx_redirects
+
+	# uwsgi delegation
+        uwsgi_pass  django_$proj;
+        include     /etc/nginx/uwsgi_params; # the uwsgi_params file you installed
+        uwsgi_intercept_errors on;
+	      error_page 400 401 402 403 404 405 406 = /error40x/;
+        error_page 500 501 502 503 504 = /error5xx/;        
+    }
+
+}

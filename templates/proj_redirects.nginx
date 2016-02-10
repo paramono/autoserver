@@ -1,0 +1,4 @@
+# if ($uri = /about.html/) {
+#     expires -1;
+#     return 301 $scheme://$server_name/about/;
+# }
