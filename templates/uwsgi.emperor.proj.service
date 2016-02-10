@@ -3,7 +3,7 @@ Description=uWSGI Emperor
 After=syslog.target
 
 [Service]
-ExecStart=/usr/local/bin/uwsgi --ini ${target_dir}/${proj}/conf/uwsgi_{proj}.ini
+ExecStart=/usr/local/bin/uwsgi --ini ${target_dir}/${proj}/conf/uwsgi_$proj.ini
 Restart=always
 KillSignal=SIGQUIT
 Type=notify

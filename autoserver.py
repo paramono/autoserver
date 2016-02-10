@@ -33,9 +33,7 @@ def setup_nginx(**kwargs):
 
         # make some locals available for templates
         # (including absolute paths)
-        # nginx_vars = ['nginx_conf', 'nginx_https', 'nginx_redirects']
-        # local_vars = locals()
-        # kwargs.update({k:local_vars[k] for k in nginx_vars})
+        # required for template rendering 
 
         # instance the main nginx project config
         instance_template('nginx', te_nginx_conf, nginx_conf, **kwargs)
@@ -151,12 +149,22 @@ def run_deploy(**kwargs):
         return
 
     if not skip_nginx:
-        os.symlink(nginx_conf, 
-            '/etc/nginx/sites-enabled/%s' % os.path.basename(nginx_conf))
+        link = '/etc/nginx/sites-enabled/%s' % os.path.basename(nginx_conf)
+        if not os.path.islink(link):
+            os.symlink(nginx_conf, link)
+        else:
+            if overwrite:
+                os.unlink(link)
+                os.symlink(nginx_conf, link)
 
     if not skip_uwsgi:
-        os.symlink(uwsgi_emperor, 
-            '/etc/systemd/system/%s' % os.path.basename(uwsgi_emperor))
+        link = '/etc/systemd/system/%s' % os.path.basename(uwsgi_emperor)
+        if not os.path.islink(link):
+            os.symlink(uwsgi_emperor, link)
+        else:
+            if overwrite:
+                os.unlink(link)
+                os.symlink(uwsgi_emperor, link)
 
 
 if __name__ == '__main__':
@@ -266,6 +274,10 @@ if __name__ == '__main__':
         os.path.join(conf_dir, 'nginx_%s_https.conf' % args['proj']))
     nginx_redirects = os.path.abspath(
         os.path.join(conf_dir, 'nginx_%s_redirects.conf' % args['proj']))
+
+    nginx_vars = ['nginx_conf', 'nginx_https', 'nginx_redirects']
+    local_vars = locals()
+    args.update({k:local_vars[k] for k in nginx_vars})
 
     uwsgi_emperor = os.path.abspath(
         os.path.join(conf_dir, 'uwsgi.emperor.%s.service' % args['proj']))
