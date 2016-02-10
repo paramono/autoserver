@@ -114,6 +114,7 @@ if __name__ == '__main__':
         'overwrite',
         'ip',
         'domain',
+        'proj',
     ]
 
     locals().update(
@@ -141,7 +142,7 @@ if __name__ == '__main__':
     has_domain_and_ip = bool(args['domain'] and args['ip'])
 
     if not all((skip_nginx, skip_uwsgi)):
-        target_conf_dir = os.path.join(target_dir, 'conf')
+        target_conf_dir = os.path.join(target_dir, proj, 'conf')
         os.makedirs(target_conf_dir, exist_ok=True)
 
     # create nginx_config
