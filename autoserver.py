@@ -30,19 +30,12 @@ def setup_nginx(**kwargs):
 
     if ip and domain: # only if ip and domain present
         print("* * * Creating nginx configs")
-        # nginx target directories
-        nginx_conf      = os.path.abspath(
-            os.path.join(conf_dir, 'nginx_%s.conf' % proj))
-        nginx_https     = os.path.abspath(
-            os.path.join(conf_dir, 'nginx_%s_https.conf' % proj))
-        nginx_redirects = os.path.abspath(
-            os.path.join(conf_dir, 'nginx_%s_redirects.conf' % proj))
 
         # make some locals available for templates
         # (including absolute paths)
-        nginx_vars = ['nginx_conf', 'nginx_https', 'nginx_redirects']
-        local_vars = locals()
-        kwargs.update({k:local_vars[k] for k in nginx_vars})
+        # nginx_vars = ['nginx_conf', 'nginx_https', 'nginx_redirects']
+        # local_vars = locals()
+        # kwargs.update({k:local_vars[k] for k in nginx_vars})
 
         # instance the main nginx project config
         instance_template('nginx', te_nginx_conf, nginx_conf, **kwargs)
@@ -64,10 +57,6 @@ def setup_uwsgi(**kwargs):
         return
 
     print("* * * Creating uwsgi configs")
-    uwsgi_emperor = os.path.abspath(
-        os.path.join(conf_dir, 'uwsgi_emperor_%s.service' % proj))
-    uwsgi_ini = os.path.abspath(
-        os.path.join(conf_dir, 'uwsgi_%s.ini' % proj))
 
     instance_template('uwsgi', te_uwsgi_emperor, uwsgi_emperor, **kwargs)
     instance_template('uwsgi', te_uwsgi_ini,     uwsgi_ini,     **kwargs)
@@ -111,7 +100,15 @@ def setup_git(**kwargs):
 
 
 def setup_venv(**kwargs):
-    locals().update(kwargs)
+    # print(locals())
+    # locals().update(kwargs)
+    # print()
+    # print(locals())
+
+    # skip_venv = kwargs['skip_venv']
+    locals().update({'skip_venv': True})
+    print(locals())
+
 
     if skip_venv:
         print('* * * Skipping virtualenv')
@@ -122,7 +119,44 @@ def setup_venv(**kwargs):
 
     print('* * * Running virtualenv')
     call(['virtualenv', '-p', 'python3', target_env_dir])
-    print_hr()
+
+def run_setup(**kwargs):
+    # print(locals())
+    # locals().update(kwargs)
+    # print()
+    # print(locals())
+
+    setup_venv(**kwargs)
+
+    if not production:
+        print("* * * Production mode off, deploying locally")
+    else:
+
+        os.makedirs(django_proj_dir, exist_ok=True)
+        os.makedirs(static_dir,      exist_ok=True)
+        os.makedirs(backups_dir,     exist_ok=True)
+
+        setup_nginx(**kwargs)
+        setup_uwsgi(**kwargs)
+        setup_git(**kwargs)
+
+
+def run_deploy(**kwargs):
+    euid = os.geteuid()
+    if euid != 0:
+        print ("Script not started as root. Running sudo..")
+        args = ['sudo', sys.executable] + sys.argv + [os.environ]
+        # the next line replaces the currently-running process with the sudo
+        os.execlpe('sudo', *args)
+        return
+
+    if not skip_nginx:
+        os.symlink(nginx_conf, 
+            '/etc/nginx/sites-enabled/%s' % os.path.basename(nginx_conf))
+
+    if not skip_uwsgi:
+        os.symlink(uwsgi_emperor, 
+            '/etc/systemd/system/%s' % os.path.basename(uwsgi_emperor))
 
 
 if __name__ == '__main__':
@@ -140,7 +174,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Automatically generate conf files for a server")
 
-    # parser.add_argument(
+    parser.add_argument('mode', metavar='mode', nargs=1)
 
     parser.add_argument('-t', '--target-dir', 
         type=is_valid_path,  
@@ -183,7 +217,8 @@ if __name__ == '__main__':
     parser.add_argument('--force-reinit-git', action='store_true')
 
     args = vars(parser.parse_args())
-    locals().update(args)
+    args['mode'] = args['mode'][0]
+    # locals().update(args)
 
     # template locations
     templates = {
@@ -194,46 +229,54 @@ if __name__ == '__main__':
         'te_nginx_redirects': 
             os.path.join(template_dir, 'nginx_proj_redirects.conf'),
         'te_uwsgi_emperor':
-            os.path.join(template_dir, 'uwsgi_emperor_proj.service'),
+            os.path.join(template_dir, 'uwsgi.emperor.proj.service'),
         'te_uwsgi_ini': 
             os.path.join(template_dir, 'uwsgi_proj.ini'),
         'te_git_hook': 
             os.path.join(template_dir, 'post-receive'),
         }
 
-    # create project dir (working dir for repo)
-    proj_dir = os.path.join(target_dir, proj)
+
+
+
+
+    # create project dir (working dir for repo):
+    proj_dir = os.path.join(args['target_dir'], args['proj'])
     dirs = {
         'proj_dir'        : proj_dir,
-        'django_proj_dir' : os.path.join(proj_dir, django_proj),
+        'django_proj_dir' : os.path.join(proj_dir, args['django_proj']),
         'static_dir'      : os.path.join(proj_dir, 'global_static'),
         'backups_dir'     : os.path.join(proj_dir, 'backups'),
         }
     args.update(templates)
     args.update(dirs)
-    locals().update(args)
 
+    # create conf directory
+    conf_dir = os.path.join(proj_dir, 'conf')
+    args.update({'conf_dir': conf_dir})
+    if not all((args['skip_nginx'], args['skip_uwsgi'])):
+        os.makedirs(conf_dir, exist_ok=True)
 
-    setup_venv(**args)
+    nginx_conf_basename = 'nginx_%s.conf' % args['proj']
 
-    if not production:
-        print("* * * Production mode off, deploying locally")
-    else:
-        # create conf directory
-        if not all((skip_nginx, skip_uwsgi)):
-            conf_dir = os.path.join(proj_dir, 'conf')
-            os.makedirs(conf_dir, exist_ok=True)
+    # nginx target directories
+    nginx_conf      = os.path.abspath(
+        os.path.join(conf_dir, nginx_conf_basename))
+    nginx_https     = os.path.abspath(
+        os.path.join(conf_dir, 'nginx_%s_https.conf' % args['proj']))
+    nginx_redirects = os.path.abspath(
+        os.path.join(conf_dir, 'nginx_%s_redirects.conf' % args['proj']))
 
-        os.makedirs(django_proj_dir, exist_ok=True)
-        os.makedirs(static_dir,      exist_ok=True)
-        os.makedirs(backups_dir,     exist_ok=True)
+    uwsgi_emperor = os.path.abspath(
+        os.path.join(conf_dir, 'uwsgi.emperor.%s.service' % args['proj']))
+    uwsgi_ini = os.path.abspath(
+        os.path.join(conf_dir, 'uwsgi_%s.ini' % args['proj']))
 
-        setup_nginx(**args)
-        setup_uwsgi(**args)
-        setup_git(**args)
+    locals().update(args) # FIXME, ugly!
 
-        if deploy:
-            pass
-
+    if 'setup' == mode:
+        run_setup(**args)
+    elif 'deploy' == mode:
+        run_deploy(**args)
 
 
