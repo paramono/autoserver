@@ -1,0 +1,13 @@
+#!/bin/bash
+
+while read oldrev newrev refname
+do
+    branch=$$(git rev-parse --symbolic --abbrev-ref $$refname)
+    if [ "master" == "$$branch" ]; then
+	      git --work-tree=${target_dir}/${proj}/${app}/ --git-dir=${target_dir}/${proj}/${app}/repo.git checkout -f master
+        # Do something
+    elif [ "beta" == "$$branch" ]; then
+	      git --work-tree=${target_dir}/beta_${proj}/${app}/ --git-dir=${target_dir}/${proj}/${app}/repo.git checkout -f beta
+    fi
+done
+
