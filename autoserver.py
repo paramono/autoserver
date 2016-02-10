@@ -6,6 +6,10 @@ import ipaddress
 
 from string import Template
 from shutil import copyfile
+from subprocess import call
+
+def print_hr(length=12, end='\n'):
+    print('* ' * length + end)
 
 def is_valid_ip(arg):
     try:
@@ -34,7 +38,6 @@ def is_writable(path, overwrite):
 
 
 def is_valid_hostname(arg):
-    print("there")
     if len(arg) > 255:
         raise argparse.ArgumentTypeError("arg %s is longer than 255 symbols!" % arg)
     if arg[-1] == ".":
@@ -45,6 +48,7 @@ def is_valid_hostname(arg):
         return arg
     else:
         raise argparse.ArgumentTypeError("Invalid domain name: %s" % arg)
+
 
 if __name__ == '__main__':
 
@@ -65,7 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--target-dir', 
         type=is_valid_path,  
         help='path to project', 
-        required=True,
+        # required=True,
         default=os.getcwd()
         )
     parser.add_argument('-p', '--proj', 
@@ -113,10 +117,11 @@ if __name__ == '__main__':
     )
 
     # template locations
-    te_nginx_filename  = os.path.join(template_dir, 'proj_conf.nginx')
-    te_nginx_https     = os.path.join(template_dir, 'proj_https.nginx')
-    te_nginx_redirects = os.path.join(template_dir, 'proj_redirects.nginx')
-    te_uwsgi_filename  = os.path.join(template_dir, 'proj.uwsgi')
+    te_nginx_filename  = os.path.join(template_dir, 'nginx_proj.conf')
+    te_nginx_https     = os.path.join(template_dir, 'nginx_https.conf')
+    te_nginx_redirects = os.path.join(template_dir, 'nginx_redirects.conf')
+    te_uwsgi_emperor   = os.path.join(template_dir, 'uwsgi_emperor_proj.service')
+    te_uwsgi_proj      = os.path.join(template_dir, 'uwsgi_proj.ini')
 
     has_domain_and_ip = bool(args['domain'] and args['ip'])
 
@@ -124,8 +129,10 @@ if __name__ == '__main__':
         target_conf_dir = os.path.join(target_dir, proj, 'conf')
         os.makedirs(target_conf_dir, exist_ok=True)
 
-    # create nginx_config
-    if not skip_nginx and ip and domain:
+    if skip_nginx:
+        print("* * * Skipping nginx")
+    elif ip and domain: # only if ip and domain present
+        print("* * * Creating nginx configs")
         # nginx target directories
         nginx_filename  = os.path.abspath(
             os.path.join(target_conf_dir, '%s_conf.nginx' % args['proj']))
@@ -146,20 +153,35 @@ if __name__ == '__main__':
 
             # write a config from a "rendered" template
             with open(nginx_filename, 'w') as nginx_file:
+                print('nginx: writing [%s]' % nginx_filename)
                 nginx_file.write(nginx_str)
 
         # https forcing snippet (commented out)
         if is_writable(nginx_https, overwrite):
+            print('nginx: writing [%s]' % nginx_https)
             copyfile(te_nginx_https, nginx_https)
 
         # redirect list snippet (commented out)
         if is_writable(nginx_redirects, overwrite):
+            print('nginx: writing [%s]' % nginx_redirects)
             copyfile(te_nginx_redirects, nginx_redirects)
 
+        print_hr()
 
-    if not skip_uwsgi:
+
+    if skip_uwsgi:
+        print('* * * Skipping uwsgi')
+    else:
         pass
 
 
-    if not skip_venv:
-        pass
+    if skip_venv:
+        print('* * * Skipping virtualenv')
+    else:
+        # create dir
+        target_env_dir = os.path.join(target_dir, proj, 'env{proj}'.format(proj=proj))
+
+        print('\n* * * Running virtualenv')
+        call(['virtualenv', '-p', 'python3', target_env_dir])
+        print_hr()
+
